@@ -24,6 +24,10 @@ authors = ["Rayman Zhang <raymanzhang@gmail.com>"]
 homepage = "https://github.com/raymanzhang/mdx"
 documentation = "https://github.com/raymanzhang/mdx/blob/main/README.md"
 
+[lib]
+name = "mdx"
+crate-type = ["lib", "cdylib"]  # 生成库和动态链接库
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]

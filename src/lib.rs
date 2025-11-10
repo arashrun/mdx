@@ -88,6 +88,7 @@
 pub mod builder;
 pub mod crypto;
 pub mod error;
+pub mod ffi;
 pub mod readers;
 pub mod storage;
 pub mod utils;
