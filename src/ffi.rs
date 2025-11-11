@@ -11,10 +11,10 @@ pub struct MdxHandle {
 }
 
 // 将实际的 MdxReader 包装在 Box 中，通过裸指针传递给 C
-type MdxReaderBox = Box<MdxReader<std::fs::File>>;
+type MdxReaderBox = *mut MdxReader;
 
 // 打开 MDX 文件并返回句柄
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mdx_open(file_path: *const c_char, device_id: *const c_char) -> *mut MdxHandle {
     if file_path.is_null() || device_id.is_null() {
         return std::ptr::null_mut();
@@ -40,38 +40,39 @@ pub extern "C" fn mdx_open(file_path: *const c_char, device_id: *const c_char) -
 
     match MdxReader::from_url(&file_url, device_id_str) {
         Ok(reader) => {
-            let reader_box: MdxReaderBox = Box::new(reader);
-            Box::into_raw(reader_box) as *mut MdxHandle
+            let reader_box: MdxReaderBox = Box::into_raw(Box::new(reader));
+            reader_box as *mut MdxHandle
         }
         Err(_) => std::ptr::null_mut(),
     }
 }
 
 // 关闭 MDX 文件并释放资源
-#[no_mangle]
-pub extern "C" fn mdx_close(handle: *mut MdxHandle) {
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mdx_close(handle: *mut MdxHandle) {
     if !handle.is_null() {
-        let _ = unsafe { Box::from_raw(handle as MdxReaderBox) };
+        let reader = handle as MdxReaderBox;
+        let _ = Box::from_raw(reader);
     }
 }
 
 // 查找关键词并返回 HTML 定义
-#[no_mangle]
-pub extern "C" fn mdx_lookup(handle: *mut MdxHandle, keyword: *const c_char) -> *mut c_char {
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mdx_lookup(handle: *mut MdxHandle, keyword: *const c_char) -> *mut c_char {
     if handle.is_null() || keyword.is_null() {
         return std::ptr::null_mut();
     }
 
-    let keyword_cstr = unsafe { CStr::from_ptr(keyword) };
+    let keyword_cstr = CStr::from_ptr(keyword);
     let keyword_str = match keyword_cstr.to_str() {
         Ok(s) => s,
         Err(_) => return std::ptr::null_mut(),
     };
 
-    let reader = unsafe { &mut *(handle as MdxReaderBox) };
+    let reader = &mut *(handle as MdxReaderBox);
 
-    match reader.lookup(keyword_str) {
-        Ok(key_index) => {
+    match reader.find_index(keyword_str, false, false, false) {
+        Ok(Some(key_index)) => {
             match reader.get_html(&key_index) {
                 Ok(html) => {
                     match CString::new(html) {
@@ -82,66 +83,65 @@ pub extern "C" fn mdx_lookup(handle: *mut MdxHandle, keyword: *const c_char) -> 
                 Err(_) => std::ptr::null_mut(),
             }
         }
+        Ok(None) => std::ptr::null_mut(),
         Err(_) => std::ptr::null_mut(),
     }
 }
 
 // 释放由 mdx_lookup 返回的字符串
-#[no_mangle]
-pub extern "C" fn mdx_free_string(s: *mut c_char) {
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mdx_free_string(s: *mut c_char) {
     if !s.is_null() {
-        unsafe {
-            let _ = CString::from_raw(s);
-        }
+        let _ = CString::from_raw(s);
     }
 }
 
 // 检查关键词是否存在
-#[no_mangle]
-pub extern "C" fn mdx_has_key(handle: *mut MdxHandle, keyword: *const c_char) -> i32 {
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mdx_has_key(handle: *mut MdxHandle, keyword: *const c_char) -> i32 {
     if handle.is_null() || keyword.is_null() {
         return 0; // false
     }
 
-    let keyword_cstr = unsafe { CStr::from_ptr(keyword) };
+    let keyword_cstr = CStr::from_ptr(keyword);
     let keyword_str = match keyword_cstr.to_str() {
         Ok(s) => s,
         Err(_) => return 0,
     };
 
-    let reader = unsafe { &mut *(handle as MdxReaderBox) };
+    let reader = &mut *(handle as MdxReaderBox);
 
-    match reader.lookup(keyword_str) {
-        Ok(_) => 1, // true
-        Err(_) => 0, // false
+    match reader.find_index(keyword_str, false, false, false) {
+        Ok(Some(_)) => 1, // true
+        _ => 0, // false
     }
 }
 
 // 获取元数据 - 词典标题
-#[no_mangle]
-pub extern "C" fn mdx_get_title(handle: *mut MdxHandle) -> *mut c_char {
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mdx_get_title(handle: *mut MdxHandle) -> *mut c_char {
     if handle.is_null() {
         return std::ptr::null_mut();
     }
 
-    let reader = unsafe { &*(handle as MdxReaderBox) };
+    let reader = &*(handle as MdxReaderBox);
     
-    match CString::new(reader.meta().db_info.title.clone()) {
+    match CString::new(reader.content_db.meta.db_info.title.clone()) {
         Ok(c_string) => c_string.into_raw(),
         Err(_) => std::ptr::null_mut(),
     }
 }
 
 // 获取元数据 - 词典描述
-#[no_mangle]
-pub extern "C" fn mdx_get_description(handle: *mut MdxHandle) -> *mut c_char {
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mdx_get_description(handle: *mut MdxHandle) -> *mut c_char {
     if handle.is_null() {
         return std::ptr::null_mut();
     }
 
-    let reader = unsafe { &*(handle as MdxReaderBox) };
+    let reader = &*(handle as MdxReaderBox);
     
-    match CString::new(reader.meta().db_info.description.clone()) {
+    match CString::new(reader.content_db.meta.db_info.description.clone()) {
         Ok(c_string) => c_string.into_raw(),
         Err(_) => std::ptr::null_mut(),
     }
