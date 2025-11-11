@@ -26,6 +26,7 @@ documentation = "https://github.com/raymanzhang/mdx/blob/main/README.md"
 
 [lib]
 name = "mdx"
+# staticlib 静态库
 crate-type = ["lib", "cdylib"]  # 生成库和动态链接库
 
 [package.metadata.docs.rs]

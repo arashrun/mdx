@@ -46,7 +46,7 @@ use crate::{Result, ZdbError};
 /// # Returns
 ///
 /// Returns the fixed path string (unchanged on non-Windows platforms).
-pub fn fix_windows_path(path: &str) -> String {
+pub fn fix_windows_path(mut path: &str) -> String {
     #[cfg(target_os = "windows")]
     if path.len()>4 {
         let chars: Vec<char> = path.chars().take(4).collect();
